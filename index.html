@@ -6,6 +6,7 @@
 <title>DBN ERP - Sistemas Construtivos</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--primary:#f97316;--primary-dark:#ea580c;--primary-light:#fb923c;--dark:#0f172a;--dark-2:#1e293b;--dark-3:#334155;--light:#f8fafc;--border:#e2e8f0;--gray:#64748b;--gray-light:#94a3b8;--success:#16a34a;--success-light:#22c55e;--danger:#dc2626;--danger-light:#ef4444;--info:#3b82f6;--info-light:#60a5fa;--warning:#f59e0b;--purple:#a855f7;--shadow:0 10px 40px rgba(0,0,0,0.1);--shadow-sm:0 4px 12px rgba(0,0,0,0.05);--radius:16px;--radius-lg:24px;}
@@ -90,6 +91,24 @@ table tr:hover td{background:#fff7ed;}
 .badge-insumo{background:#dbeafe;color:#1d4ed8;}
 .badge-parede{background:#dcfce7;color:#15803d;}
 .badge-produto{background:#f3e8ff;color:#7c3aed;}
+.status-pendente{background:#fef3c7;color:#92400e;border:2px solid #fcd34d;}
+.status-em-andamento{background:#dbeafe;color:#1d4ed8;border:2px solid #60a5fa;}
+.status-concluido{background:#dcfce7;color:#15803d;border:2px solid #22c55e;}
+.status-cancelado{background:#fee2e2;color:#991b1b;border:2px solid #ef4444;}
+.qr-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;}
+.qr-modal.active{display:flex;}
+.qr-content{background:white;padding:35px;border-radius:24px;text-align:center;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.3);animation:qrFadeIn 0.3s ease;}
+@keyframes qrFadeIn{from{opacity:0;transform:scale(0.9);}to{opacity:1;transform:scale(1);}}
+.qr-content h3{color:#0f172a;margin-bottom:20px;font-size:20px;}
+.qr-code-container{background:white;padding:20px;border-radius:16px;display:inline-block;margin:20px 0;border:2px solid #f1f5f9;}
+.qr-info{text-align:left;background:#f8fafc;padding:20px;border-radius:14px;margin-top:20px;}
+.qr-info p{margin:8px 0;font-size:14px;color:#475569;}
+.qr-info strong{color:#0f172a;}
+.close-modal{background:#f1f5f9;border:none;padding:12px 24px;border-radius:12px;cursor:pointer;font-weight:600;color:#475569;transition:all 0.3s;margin-top:15px;}
+.close-modal:hover{background:#e2e8f0;color:#0f172a;}
+.status-select{padding:10px 14px;border-radius:10px;border:2px solid #e2e8f0;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.3s;}
+.status-select:hover{border-color:#f97316;}
+.apontamento-actions{display:flex;gap:10px;flex-wrap:wrap;}
 </style>
 </head>
 <body>
@@ -325,15 +344,52 @@ table tr:hover td{background:#fff7ed;}
                         <option>PCP</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Status Inicial</label>
+                    <select id="apontamentoStatus">
+                        <option value="pendente">⏳ Pendente</option>
+                        <option value="em-andamento">🔄 Em Andamento</option>
+                        <option value="concluido">✅ Concluído</option>
+                    </select>
+                </div>
             </div>
             <button class="btn" onclick="registrarApontamento()">✅ Registrar Produção</button>
             
             <hr style="margin:30px 0;border:none;border-top:2px solid #f1f5f9;">
             
-            <h3 style="margin-bottom:20px;color:#0f172a;">📋 Histórico de Apontamentos</h3>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="color:#0f172a;">📋 Histórico de Apontamentos</h3>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <span style="font-size:13px;color:#64748b;">Filtrar por status:</span>
+                    <select id="filtroStatus" onchange="filtrarApontamentosPorStatus()" style="padding:8px 14px;border-radius:10px;border:2px solid #e2e8f0;font-size:13px;">
+                        <option value="todos">Todos</option>
+                        <option value="pendente">⏳ Pendente</option>
+                        <option value="em-andamento">🔄 Em Andamento</option>
+                        <option value="concluido">✅ Concluído</option>
+                        <option value="cancelado">❌ Cancelado</option>
+                    </select>
+                </div>
+            </div>
             <div id="listaApontamentos"></div>
         </div>
     </section>
+
+    <!-- MODAL QR CODE -->
+    <div id="qrModal" class="qr-modal">
+        <div class="qr-content">
+            <h3>📱 QR Code do Apontamento</h3>
+            <div id="qrCodeContainer" class="qr-code-container"></div>
+            <div class="qr-info">
+                <p><strong>Produto:</strong> <span id="qrProduto"></span></p>
+                <p><strong>Quantidade:</strong> <span id="qrQuantidade"></span></p>
+                <p><strong>Setor:</strong> <span id="qrSetor"></span></p>
+                <p><strong>Status:</strong> <span id="qrStatus"></span></p>
+                <p><strong>Data:</strong> <span id="qrData"></span></p>
+                <p><strong>ID:</strong> <span id="qrId" style="font-family:monospace;font-size:12px;"></span></p>
+            </div>
+            <button class="close-modal" onclick="fecharModalQR()">✕ Fechar</button>
+        </div>
+    </div>
 
     <!-- PROGRAMAÇÃO -->
     <section id="programacao-section" class="content-section">
@@ -614,6 +670,7 @@ function registrarApontamento() {
     const produtoCodigo = document.getElementById('apontamentoProduto').value;
     const quantidade = parseFloat(document.getElementById('apontamentoQtd').value);
     const setor = document.getElementById('apontamentoSetor').value;
+    const status = document.getElementById('apontamentoStatus').value;
     
     if (!produtoCodigo || !quantidade) {
         alert('Preencha todos os campos!');
@@ -626,7 +683,14 @@ function registrarApontamento() {
         data: new Date().toISOString().slice(0, 10),
         produtoCodigo,
         quantidade,
-        setor
+        setor,
+        status: status || 'pendente',
+        historicoStatus: [{
+            status: status || 'pendente',
+            setor: setor,
+            data: new Date().toISOString(),
+            usuario: 'Usuário'
+        }]
     });
     
     atualizarListaApontamentos();
@@ -639,24 +703,161 @@ function registrarApontamento() {
 
 function atualizarListaApontamentos() {
     const container = document.getElementById('listaApontamentos');
+    const filtro = document.getElementById('filtroStatus')?.value || 'todos';
     container.innerHTML = '';
-    if (apontamentos.length === 0) {
+    
+    let apontamentosFiltrados = apontamentos;
+    if (filtro !== 'todos') {
+        apontamentosFiltrados = apontamentos.filter(a => a.status === filtro);
+    }
+    
+    if (apontamentosFiltrados.length === 0) {
         container.innerHTML = '<p style="color:#64748b;text-align:center;padding:20px;">Nenhum apontamento registrado.</p>';
         return;
     }
-    apontamentos.forEach(ap => {
+    
+    const statusLabels = {
+        'pendente': { label: '⏳ Pendente', class: 'status-pendente' },
+        'em-andamento': { label: '🔄 Em Andamento', class: 'status-em-andamento' },
+        'concluido': { label: '✅ Concluído', class: 'status-concluido' },
+        'cancelado': { label: '❌ Cancelado', class: 'status-cancelado' }
+    };
+    
+    apontamentosFiltrados.forEach(ap => {
         const prod = produtos.find(p => p.codigo === ap.produtoCodigo);
-        container.innerHTML += `<div class="apontamento-card">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <strong style="color:#0f172a;font-size:16px;">${prod?.nome || ap.produtoCodigo}</strong>
-                    <div style="color:#64748b;font-size:13px;margin-top:5px;">📅 ${ap.data} • 🏭 ${ap.setor}</div>
+        const statusInfo = statusLabels[ap.status] || statusLabels['pendente'];
+        
+        container.innerHTML += `<div class="apontamento-card" style="background:linear-gradient(135deg,#fff7ed,#ffedd5);border-left:5px solid #f97316;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:15px;">
+                <div style="flex:1;min-width:250px;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                        <strong style="color:#0f172a;font-size:18px;">${prod?.nome || ap.produtoCodigo}</strong>
+                        <span class="status ${statusInfo.class}">${statusInfo.label}</span>
+                    </div>
+                    <div style="color:#64748b;font-size:13px;line-height:1.8;">
+                        <div>📅 <strong>Data:</strong> ${ap.data}</div>
+                        <div>🏭 <strong>Setor:</strong> ${ap.setor}</div>
+                        <div>📦 <strong>Quantidade:</strong> ${ap.quantidade} ${prod?.unidade || ''}</div>
+                        ${ap.historicoStatus && ap.historicoStatus.length > 1 ? `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #fcd34d;font-size:12px;">
+                            <strong>Histórico de Status:</strong>
+                            ${ap.historicoStatus.map(h => `<div style="color:#92400e;margin-top:5px;">• ${h.status} - ${h.setor} (${new Date(h.data).toLocaleDateString('pt-BR')})</div>`).join('')}
+                        </div>` : ''}
+                    </div>
                 </div>
-                <span style="font-size:20px;font-weight:700;color:#f97316;">${ap.quantidade} ${prod?.unidade || ''}</span>
+                <div class="apontamento-actions" style="flex-direction:column;gap:10px;min-width:200px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <label style="font-size:12px;color:#64748b;font-weight:600;">Atualizar Status:</label>
+                        <select class="status-select" onchange="atualizarStatusApontamento('${ap.id}', this.value)" style="flex:1;">
+                            <option value="pendente" ${ap.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option>
+                            <option value="em-andamento" ${ap.status === 'em-andamento' ? 'selected' : ''}>🔄 Em Andamento</option>
+                            <option value="concluido" ${ap.status === 'concluido' ? 'selected' : ''}>✅ Concluído</option>
+                            <option value="cancelado" ${ap.status === 'cancelado' ? 'selected' : ''}>❌ Cancelado</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-small" onclick="abrirModalQR('${ap.id}')" style="background:linear-gradient(135deg,#3b82f6,#2563eb);">📱 QR Code</button>
+                        <button class="btn btn-small btn-danger" onclick="removerApontamento('${ap.id}')" style="background:linear-gradient(135deg,#dc2626,#b91c1c);">🗑️</button>
+                    </div>
+                </div>
             </div>
         </div>`;
     });
 }
+
+function atualizarStatusApontamento(id, novoStatus) {
+    const apontamento = apontamentos.find(a => a.id === id);
+    if (!apontamento) return;
+    
+    apontamento.status = novoStatus;
+    if (!apontamento.historicoStatus) {
+        apontamento.historicoStatus = [];
+    }
+    apontamento.historicoStatus.push({
+        status: novoStatus,
+        setor: apontamento.setor,
+        data: new Date().toISOString(),
+        usuario: 'Usuário'
+    });
+    
+    atualizarListaApontamentos();
+    
+    const statusLabels = {
+        'pendente': 'Pendente',
+        'em-andamento': 'Em Andamento',
+        'concluido': 'Concluído',
+        'cancelado': 'Cancelado'
+    };
+    
+    alert(`Status atualizado para: ${statusLabels[novoStatus]}`);
+}
+
+function removerApontamento(id) {
+    if (confirm('Tem certeza que deseja remover este apontamento?')) {
+        apontamentos = apontamentos.filter(a => a.id !== id);
+        atualizarListaApontamentos();
+        atualizarDashboardStats();
+    }
+}
+
+function filtrarApontamentosPorStatus() {
+    atualizarListaApontamentos();
+}
+
+function abrirModalQR(id) {
+    const apontamento = apontamentos.find(a => a.id === id);
+    if (!apontamento) return;
+    
+    const prod = produtos.find(p => p.codigo === apontamento.produtoCodigo);
+    
+    const qrData = {
+        id: apontamento.id,
+        produto: prod?.nome || apontamento.produtoCodigo,
+        codigo: apontamento.produtoCodigo,
+        quantidade: apontamento.quantidade,
+        unidade: prod?.unidade || '',
+        setor: apontamento.setor,
+        status: apontamento.status,
+        data: apontamento.data
+    };
+    
+    document.getElementById('qrCodeContainer').innerHTML = '';
+    
+    new QRCode(document.getElementById('qrCodeContainer'), {
+        text: JSON.stringify(qrData),
+        width: 200,
+        height: 200,
+        colorDark: '#0f172a',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+    });
+    
+    const statusLabels = {
+        'pendente': '⏳ Pendente',
+        'em-andamento': '🔄 Em Andamento',
+        'concluido': '✅ Concluído',
+        'cancelado': '❌ Cancelado'
+    };
+    
+    document.getElementById('qrProduto').textContent = `${prod?.nome || apontamento.produtoCodigo} (${apontamento.produtoCodigo})`;
+    document.getElementById('qrQuantidade').textContent = `${apontamento.quantidade} ${prod?.unidade || ''}`;
+    document.getElementById('qrSetor').textContent = apontamento.setor;
+    document.getElementById('qrStatus').textContent = statusLabels[apontamento.status] || apontamento.status;
+    document.getElementById('qrData').textContent = new Date(apontamento.data).toLocaleDateString('pt-BR');
+    document.getElementById('qrId').textContent = apontamento.id;
+    
+    document.getElementById('qrModal').classList.add('active');
+}
+
+function fecharModalQR() {
+    document.getElementById('qrModal').classList.remove('active');
+}
+
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('qrModal');
+    if (e.target === modal) {
+        fecharModalQR();
+    }
+});
 
 // ======================== PROGRAMAÇÃO ========================
 function adicionarProgramacao() {
